@@ -86,8 +86,9 @@ export const config: NextAuthOptions = {
     }
   },
   pages: {
-    signIn: '/signup',
+    signIn: '/account',
   },
+  debug: process.env.NODE_ENV === 'development',
   secret: process.env.NEXTAUTH_SECRET,
 };
 

@@ -13,9 +13,11 @@ export async function GET(
   { params }: { params: { chatId: string } }
 ) {
   try {
+    console.log("GET chat history for:", params.chatId);
     const session = await getServerSession(config);
     
     if (!session?.user?.email) {
+      console.log("Unauthorized: No session email");
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -23,6 +25,7 @@ export async function GET(
     }
 
     await dbConnect();
+    console.log("Looking for chat with ID", params.chatId, "for user", session.user.email);
     
     const { chatId } = params;
     
@@ -33,12 +36,14 @@ export async function GET(
     }).lean();
     
     if (!chatHistory) {
+      console.log("Chat history not found");
       return NextResponse.json(
         { error: "Chat history not found" },
         { status: 404 }
       );
     }
     
+    console.log("Found chat history with", chatHistory.messages?.length || 0, "messages");
     return NextResponse.json({
       success: true,
       chatHistory

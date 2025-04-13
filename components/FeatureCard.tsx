@@ -29,7 +29,7 @@ const FeatureCard = ({
   
   return (
     <motion.div 
-      className="p-6 rounded-lg border border-white/5 relative overflow-hidden"
+      className="p-4 sm:p-6 rounded-lg border border-white/5 relative overflow-hidden"
       style={{
         background: "linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
         backdropFilter: "blur(10px)",
@@ -45,15 +45,15 @@ const FeatureCard = ({
       }}
       transition={{ duration: 0.3 }}
     > 
-      <div className="absolute top-0 right-0 w-20 h-20 rounded-full blur-[30px] -z-10 opacity-20" 
+      <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 rounded-full blur-[30px] -z-10 opacity-20" 
         style={{ background: `var(--${color === "blue" ? "blue" : color === "green" ? "green" : color === "yellow" ? "yellow" : color === "red" ? "red" : "purple"}-500)` }}
       />
       
-      <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${bg}`}>
-        <Icon className={text} size={24} />
+      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center mb-3 sm:mb-4 ${bg}`}>
+        <Icon className={text} size={20} />
       </div>
-      <h3 className="text-xl font-bold mb-3">{title}</h3>
-      <p className="text-white/70">{description}</p>
+      <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">{title}</h3>
+      <p className="text-sm sm:text-base text-white/70">{description}</p>
     </motion.div>
   );
 };

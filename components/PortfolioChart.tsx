@@ -22,9 +22,9 @@ import {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="glassmorphism p-3 rounded-lg border border-white/10">
-          <p className="text-xs text-white/70">{label}</p>
-          <p className="text-sm font-bold font-mono">${payload[0].value.toLocaleString()}</p>
+        <div className="glassmorphism p-2 sm:p-3 rounded-lg border border-white/10">
+          <p className="text-[10px] sm:text-xs text-white/70">{label}</p>
+          <p className="text-xs sm:text-sm font-bold font-mono">${payload[0].value.toLocaleString()}</p>
         </div>
       );
     }
@@ -34,10 +34,10 @@ import {
   
   const PortfolioChart = () => {
     return (
-      <div className="glassmorphism rounded-xl p-4 h-[300px]">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-medium">Portfolio Value</h3>
-          <div className="text-sm text-white/70">
+      <div className="glassmorphism rounded-xl p-3 sm:p-4 h-[250px] sm:h-[300px]">
+        <div className="flex justify-between items-center mb-2 sm:mb-4">
+          <h3 className="text-sm sm:text-base font-medium">Portfolio Value</h3>
+          <div className="text-xs sm:text-sm text-white/70">
             <span className="text-flow-teal">+14.8%</span> last 6 months
           </div>
         </div>
@@ -58,13 +58,17 @@ import {
               dataKey="name" 
               axisLine={false} 
               tickLine={false} 
-              tick={{ fill: 'rgba(255,255,255,0.6)', fontSize: 12 }} 
+              tick={{ fill: 'rgba(255,255,255,0.6)', fontSize: 10 }} 
+              style={{ fontSize: '10px' }}
+              interval={'preserveStartEnd'}
             />
             <YAxis 
               axisLine={false} 
               tickLine={false} 
-              tick={{ fill: 'rgba(255,255,255,0.6)', fontSize: 12 }} 
-              tickFormatter={(tick) => `$${tick.toLocaleString()}`}
+              tick={{ fill: 'rgba(255,255,255,0.6)', fontSize: 10 }}
+              style={{ fontSize: '10px' }}
+              tickFormatter={(tick) => `$${tick/1000}k`}
+              width={40}
             />
             <Tooltip content={<CustomTooltip />} />
             <Area 

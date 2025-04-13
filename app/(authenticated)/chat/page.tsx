@@ -5,7 +5,7 @@ import { Clock, ChevronDown, ArchiveRestore, AlertCircle, PanelRightClose, Panel
 import { Chat } from '@/components/chat';
 import { useSession } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -19,8 +19,13 @@ interface ChatSession {
   messages: Message[];
 }
 
-const ChatPage = () => {
+interface ChatPageProps {
+  initialChatId?: string;
+}
+
+const ChatPage = ({ initialChatId }: ChatPageProps) => {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: session, status } = useSession();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
@@ -28,7 +33,7 @@ const ChatPage = () => {
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [previousChats, setPreviousChats] = useState<ChatSession[]>([]);
   const [loadingChats, setLoadingChats] = useState(false);
-  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(initialChatId || null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Session protection - redirect if not authenticated
@@ -37,6 +42,13 @@ const ChatPage = () => {
       router.push('/account');
     }
   }, [status, router]);
+
+  // Update currentChatId when initialChatId changes
+  useEffect(() => {
+    if (initialChatId) {
+      setCurrentChatId(initialChatId);
+    }
+  }, [initialChatId]);
 
   // Handle clicks outside the dropdown
   useEffect(() => {
@@ -66,16 +78,19 @@ const ChatPage = () => {
       
       const data = await response.json();
       
-      if (Array.isArray(data)) {
+      if (data.success && data.chatHistories) {
         // Format the data to match our ChatSession interface
-        const formattedChats = data.map(chat => ({
-          id: chat.id || chat._id,
+        const formattedChats = data.chatHistories.map((chat: any) => ({
+          id: chat.chatId,
           title: chat.title || 'Untitled Chat',
-          timestamp: new Date(chat.createdAt || chat.timestamp).toLocaleString(),
+          timestamp: chat.updatedAt || new Date().toISOString(),
           messages: chat.messages || []
         }));
         
         setPreviousChats(formattedChats);
+        console.log("Formatted chat histories:", formattedChats);
+      } else {
+        console.log("No chat histories found or format unexpected:", data);
       }
     } catch (error) {
       console.error('Error fetching chat history:', error);
@@ -134,8 +149,10 @@ const ChatPage = () => {
     setCurrentChatId(chatId);
     setShowDropdown(false);
     
-    // The Chat component will observe currentChatId and load the appropriate chat
-    // We'll implement this by passing the currentChatId as a prop to the Chat component
+    // Update the URL without refreshing the page
+    if (pathname !== `/chat/${chatId}`) {
+      router.push(`/chat/${chatId}`, { scroll: false });
+    }
   };
 
   // Initialize
@@ -169,6 +186,11 @@ const ChatPage = () => {
   const startNewChat = () => {
     setCurrentChatId(null);
     setShowDropdown(false);
+    
+    // Update URL to /chat for new chat
+    if (pathname !== '/chat') {
+      router.push('/chat', { scroll: false });
+    }
   };
 
   const formatTimestamp = (timestamp: string) => {

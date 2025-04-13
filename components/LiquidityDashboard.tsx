@@ -48,25 +48,25 @@ const poolData = [
 
 const LiquidityDashboard = () => {
   return (
-    <section id="dashboard" className="py-20">
+    <section id="dashboard" className="py-12 sm:py-16 md:py-20 responsive-padding">
       <motion.div 
-        className="text-center mb-12"
+        className="text-center mb-8 sm:mb-12"
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5 }}
       >
-        <h2 className="text-3xl md:text-4xl font-bold mb-4">
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">
           Intelligent <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-blue-200">Liquidity Dashboard</span>
         </h2>
-        <p className="text-white/70 max-w-2xl mx-auto">
+        <p className="text-sm sm:text-base text-white/70 max-w-2xl mx-auto px-4 sm:px-0">
           Visualize your liquidity positions across multiple protocols and receive
           AI-powered recommendations to optimize yield and reduce impermanent loss.
         </p>
       </motion.div>
       
       <motion.div 
-        className="p-6 rounded-lg border border-white/5 relative overflow-hidden"
+        className="p-4 sm:p-6 rounded-lg border border-white/5 relative overflow-hidden"
         style={{
           background: "linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
           backdropFilter: "blur(10px)",
@@ -79,11 +79,11 @@ const LiquidityDashboard = () => {
       >
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
         
-        <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
           <div className="lg:w-2/3">
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 sm:mb-6">
               <motion.div 
-                className="flex-1 p-4 rounded-lg border border-white/5 relative overflow-hidden"
+                className="p-3 sm:p-4 rounded-lg border border-white/5 relative overflow-hidden"
                 style={{
                   background: "linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
                   backdropFilter: "blur(10px)"
@@ -93,17 +93,17 @@ const LiquidityDashboard = () => {
                 viewport={{ once: true }}
                 transition={{ duration: 0.3, delay: 0.1 }}
               >
-                <div className="absolute top-0 right-0 w-20 h-20 rounded-full blur-[30px] -z-10 opacity-20 bg-blue-500" />
-                <div className="flex items-center mb-2">
-                  <Wallet className="mr-2 text-blue-400" size={20} />
-                  <h3 className="font-medium">Total Value</h3>
+                <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 rounded-full blur-[30px] -z-10 opacity-20 bg-blue-500" />
+                <div className="flex items-center mb-1 sm:mb-2">
+                  <Wallet className="mr-2 text-blue-400" size={16} />
+                  <h3 className="text-sm sm:text-base font-medium">Total Value</h3>
                 </div>
-                <div className="text-2xl font-bold font-mono">$19,990</div>
-                <div className="text-green-400 text-sm mt-1">+2.4% (24h)</div>
+                <div className="text-xl sm:text-2xl font-bold font-mono">$19,990</div>
+                <div className="text-green-400 text-xs sm:text-sm mt-1">+2.4% (24h)</div>
               </motion.div>
               
               <motion.div 
-                className="flex-1 p-4 rounded-lg border border-white/5 relative overflow-hidden"
+                className="p-3 sm:p-4 rounded-lg border border-white/5 relative overflow-hidden"
                 style={{
                   background: "linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
                   backdropFilter: "blur(10px)"
@@ -113,17 +113,17 @@ const LiquidityDashboard = () => {
                 viewport={{ once: true }}
                 transition={{ duration: 0.3, delay: 0.2 }}
               >
-                <div className="absolute top-0 right-0 w-20 h-20 rounded-full blur-[30px] -z-10 opacity-20 bg-green-500" />
-                <div className="flex items-center mb-2">
-                  <BarChart4 className="mr-2 text-green-400" size={20} />
-                  <h3 className="font-medium">Avg APR</h3>
+                <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 rounded-full blur-[30px] -z-10 opacity-20 bg-green-500" />
+                <div className="flex items-center mb-1 sm:mb-2">
+                  <BarChart4 className="mr-2 text-green-400" size={16} />
+                  <h3 className="text-sm sm:text-base font-medium">Avg APR</h3>
                 </div>
-                <div className="text-2xl font-bold font-mono">3.8%</div>
-                <div className="text-green-400 text-sm mt-1">+0.6% from prev month</div>
+                <div className="text-xl sm:text-2xl font-bold font-mono">3.8%</div>
+                <div className="text-green-400 text-xs sm:text-sm mt-1">+0.6% from prev month</div>
               </motion.div>
               
               <motion.div 
-                className="flex-1 p-4 rounded-lg border border-white/5 relative overflow-hidden"
+                className="p-3 sm:p-4 rounded-lg border border-white/5 relative overflow-hidden"
                 style={{
                   background: "linear-gradient(to bottom right, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
                   backdropFilter: "blur(10px)"
@@ -133,31 +133,31 @@ const LiquidityDashboard = () => {
                 viewport={{ once: true }}
                 transition={{ duration: 0.3, delay: 0.3 }}
               >
-                <div className="absolute top-0 right-0 w-20 h-20 rounded-full blur-[30px] -z-10 opacity-20 bg-yellow-500" />
-                <div className="flex items-center mb-2">
-                  <ArrowRightLeft className="mr-2 text-yellow-400" size={20} />
-                  <h3 className="font-medium">IL Saved</h3>
+                <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 rounded-full blur-[30px] -z-10 opacity-20 bg-yellow-500" />
+                <div className="flex items-center mb-1 sm:mb-2">
+                  <ArrowRightLeft className="mr-2 text-yellow-400" size={16} />
+                  <h3 className="text-sm sm:text-base font-medium">IL Saved</h3>
                 </div>
-                <div className="text-2xl font-bold font-mono">$842</div>
-                <div className="text-green-400 text-sm mt-1">Last 30 days</div>
+                <div className="text-xl sm:text-2xl font-bold font-mono">$842</div>
+                <div className="text-green-400 text-xs sm:text-sm mt-1">Last 30 days</div>
               </motion.div>
             </div>
             
             <PortfolioChart />
           </div>
           
-          <div className="lg:w-1/3 space-y-4">
+          <div className="lg:w-1/3 space-y-3 sm:space-y-4 mt-4 lg:mt-0">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="font-medium">Your Liquidity Pools</h3>
+              <h3 className="text-sm sm:text-base font-medium">Your Liquidity Pools</h3>
               <Button 
                 variant="outline" 
-                className="text-xs h-8 border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                className="text-xs h-7 sm:h-8 border-white/10 bg-white/5 hover:bg-white/10 text-white"
               >
                 View All
               </Button>
             </div>
             
-            <div className="max-h-[380px] overflow-y-auto pr-2 space-y-4">
+            <div className="max-h-[320px] sm:max-h-[380px] overflow-y-auto pr-2 space-y-3 sm:space-y-4">
               {poolData.map((pool, index) => (
                 <motion.div
                   key={index}
@@ -171,7 +171,7 @@ const LiquidityDashboard = () => {
               ))}
             </div>
             
-            <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg">
+            <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg text-sm sm:text-base py-2 sm:py-3">
               Rebalance All
             </Button>
           </div>

@@ -1,5 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Shield, ExternalLink, Copy } from "lucide-react";
+import { 
+Send, 
+AlertCircle,
+Loader2,
+BarChart3,
+Shield,
+TrendingUp,
+Building
+} from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -8,609 +16,636 @@ import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWallet } from "@/contexts/WalletContext";
 import { ethers } from "ethers";
-
-interface Message {
-  id: string;
-  content: string;
-  sender: "user" | "ai";
-  timestamp: Date;
-  signature?: string;
-  verified?: boolean;
-  txHash?: string;
-}
-
-interface ChatProps {
-  chatId?: string | null;
-}
+import { showNotification } from "@/lib/utils";
+import MessageComponent from "@/components/message";
+import { type Message as MessageType } from "@/types/chat";
+import { Checkbox } from "./ui/checkbox";
+import { Label } from "./ui/label";
+import { Input } from "./ui/input";
+import { useRouter } from "next/navigation";
+import { ChatHistoryItem, ChatProps } from "@/types/chat";
 
 // Simple notification function to replace toast
-const showNotification = (message: { title: string; description?: string; variant?: 'default' | 'destructive' }) => {
-  console.log(`${message.title}${message.description ? ': ' + message.description : ''}`);
+const showToastNotification = (message: { title: string; description?: string; variant?: 'default' | 'destructive' }) => {
+console.log(`${message.title}${message.description ? ': ' + message.description : ''}`);
 };
 
-export function Chat({ chatId }: ChatProps) {
-  const { data: session } = useSession();
-  const { isConnected, address, connectWallet } = useWallet();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isFetchingHistory, setIsFetchingHistory] = useState(false);
-  const [ensName, setEnsName] = useState<string | null>(null);
-  const [saveOnChain, setSaveOnChain] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+export function Chat({ chatId: initialChatIdProp = null, onFetchChatHistories, fetchChatHistories, initialChatId }: ChatProps) {
+const { data: session, status } = useSession();
+const { isConnected, address, connectWallet, signMessage, saveMessageOnChain } = useWallet();
+const [messages, setMessages] = useState<MessageType[]>([]);
+const [input, setInput] = useState("");
+const [isLoading, setIsLoading] = useState(false);
+const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+const [isLoadingChats, setIsLoadingChats] = useState(false);
+const [ensName, setEnsName] = useState<string | null>(null);
+const [saveOnChain, setSaveOnChain] = useState(false);
+const [isVerifying, setIsVerifying] = useState(false);
+const [authError, setAuthError] = useState<string | null>(null);
+const [chatHistories, setChatHistories] = useState<ChatHistoryItem[]>([]);
+const [showChatList, setShowChatList] = useState(false);
+const messagesEndRef = useRef<HTMLDivElement>(null);
+const [chatId, setChatId] = useState<string | null>(initialChatId || initialChatIdProp || null);
+const router = useRouter();
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+// Check if authentication is working
+useEffect(() => {
+  if (status === 'loading') return;
+  
+  if (status === 'unauthenticated') {
+    setAuthError('Please sign in to use the chat feature');
+  } else {
+    setAuthError(null);
+    // Fetch chat histories when user is authenticated
+    fetchChatHistories?.();
+  }
+}, [status, fetchChatHistories]);
 
-  // Fetch ENS name when address changes
-  useEffect(() => {
-    if (address && isValidAddress(address)) {
-      fetchEnsName(address);
-    } else {
-      setEnsName(null);
+const scrollToBottom = () => {
+  messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+};
+
+// Fetch ENS name when address changes
+useEffect(() => {
+  if (address && isValidAddress(address)) {
+    fetchEnsName(address);
+  } else {
+    setEnsName(null);
+  }
+}, [address]);
+
+// Check if string is a valid Ethereum address
+const isValidAddress = (address: string): boolean => {
+  try {
+    return ethers.isAddress(address);
+  } catch (error) {
+    console.error("Error validating address:", error);
+    return false;
+  }
+};
+
+// Scroll to bottom when messages change
+useEffect(() => {
+  scrollToBottom();
+}, [messages]);
+
+// Fetch all chat histories for the user
+const fetchUserChatHistories = async () => {
+  if (!session) return;
+  
+  try {
+    setIsLoadingChats(true);
+    const response = await fetch('/api/chat-history');
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch chat histories: ${response.status}`);
     }
-  }, [address]);
-
-  // Check if string is a valid Ethereum address
-  const isValidAddress = (address: string): boolean => {
-    try {
-      return ethers.isAddress(address);
-    } catch (error) {
-      console.error("Error validating address:", error);
-      return false;
-    }
-  };
-
-  // Fetch chat history when chatId changes
-  useEffect(() => {
-    if (chatId) {
-      fetchChatHistory(chatId);
+    
+    const data = await response.json();
+    
+    if (data.success && data.chatHistories) {
+      setChatHistories(data.chatHistories);
+      console.log("Fetched chat histories:", data.chatHistories);
     } else {
-      // Reset to empty chat if no chatId is provided
+      console.log("No chat histories found or empty response");
+      setChatHistories([]);
+    }
+  } catch (error) {
+    console.error('Error fetching chat histories:', error);
+    setChatHistories([]);
+  } finally {
+    setIsLoadingChats(false);
+  }
+};
+
+// Load a specific chat
+const loadChat = async (id: string) => {
+  setIsLoading(true);
+  try {
+    console.log(`Loading chat with ID: ${id}`);
+    const response = await fetch(`/api/chat-history/${id}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to load chat: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Chat data received:', data);
+    
+    if (data.success && data.chatHistory && data.chatHistory.messages) {
+      // Transform the messages to match our expected format
+      const formattedMessages = data.chatHistory.messages.map((msg: any) => ({
+        id: msg.id || `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        content: msg.content,
+        sender: msg.role === 'user' ? 'user' : 'assistant',
+        timestamp: new Date(msg.timestamp || Date.now()),
+        signature: msg.signature,
+        verified: msg.verified,
+        txHash: msg.txHash
+      }));
+      
+      console.log(`Loaded ${formattedMessages.length} messages`);
+      setMessages(formattedMessages);
+    } else {
+      console.warn('No messages found in chat history or unexpected response format', data);
       setMessages([]);
     }
-  }, [chatId]);
+  } catch (error) {
+    console.error("Error loading chat:", error);
+    showToastNotification({
+      title: "Error",
+      description: "Failed to load chat history",
+      variant: "destructive"
+    });
+    setMessages([]);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+// Fetch chat history when chatId changes
+useEffect(() => {
+  if (chatId) {
+    loadChat(chatId);
+  } else {
+    // Reset to empty chat if no chatId is provided
+    setMessages([]);
+  }
+}, [chatId]);
 
-  // Fetch ENS name for the connected wallet
-  const fetchEnsName = async (walletAddress: string) => {
-    try {
-      // Use a public provider with a proper API key or handle errors gracefully
-      // Many providers require API keys for production use
-      
-      // Option 1: Use window.ethereum if available (user's own connected provider)
-      if (window.ethereum) {
-        try {
-          const provider = new ethers.BrowserProvider(window.ethereum as any);
-          const name = await provider.lookupAddress(walletAddress);
-          setEnsName(name);
-          return;
-        } catch (browserProviderError) {
-          console.log("Could not use browser provider for ENS lookup, falling back to public provider");
-          // Continue to fallback options
-        }
-      }
-      
-      // Option 2: Try a public provider with fallback
+// Fetch ENS name for the connected wallet
+const fetchEnsName = async (walletAddress: string) => {
+  try {
+    // Use a public provider with a proper API key or handle errors gracefully
+    // Many providers require API keys for production use
+    
+    // Option 1: Use window.ethereum if available (user's own connected provider)
+    if (window.ethereum) {
       try {
-        // Only attempt ENS lookup if we have a proper provider URL
-        const providerUrl = process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL;
-        
-        // If no provider URL is available, just use the address
-        if (!providerUrl) {
-          console.log("No Ethereum RPC URL provided for ENS lookup");
-          setEnsName(null);
-          return;
-        }
-        
-        const provider = new ethers.JsonRpcProvider(providerUrl);
+        const provider = new ethers.BrowserProvider(window.ethereum as any);
         const name = await provider.lookupAddress(walletAddress);
         setEnsName(name);
-      } catch (publicProviderError) {
-        console.error("Error with public provider ENS lookup:", publicProviderError);
-        setEnsName(null);
+        return;
+      } catch (browserProviderError) {
+        console.log("Could not use browser provider for ENS lookup, falling back to public provider");
+        // Continue to fallback options
       }
-    } catch (error) {
-      // Catch all possible errors and fail gracefully
-      console.error("Error fetching ENS name:", error);
+    }
+    
+    // Option 2: Try a public provider with fallback
+    try {
+      // Only attempt ENS lookup if we have a proper provider URL
+      const providerUrl = process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL;
+      
+      // If no provider URL is available, just use the address
+      if (!providerUrl) {
+        console.log("No Ethereum RPC URL provided for ENS lookup");
+        setEnsName(null);
+        return;
+      }
+      
+      const provider = new ethers.JsonRpcProvider(providerUrl);
+      const name = await provider.lookupAddress(walletAddress);
+      setEnsName(name);
+    } catch (publicProviderError) {
+      console.error("Error with public provider ENS lookup:", publicProviderError);
       setEnsName(null);
     }
-  };
+  } catch (error) {
+    // Catch all possible errors and fail gracefully
+    console.error("Error fetching ENS name:", error);
+    setEnsName(null);
+  }
+};
 
-  // Fetch chat history from the API
-  const fetchChatHistory = async (id: string) => {
-    if (!session) return;
-    
-    try {
-      setIsFetchingHistory(true);
-      
-      // Use the proper API endpoint now that it's available
+// Verify a message signature
+const verifySignature = (message: string, signature: string, signerAddress: string): boolean => {
+  try {
+    const recoveredAddress = ethers.verifyMessage(message, signature);
+    return recoveredAddress.toLowerCase() === signerAddress.toLowerCase();
+  } catch (error) {
+    console.error("Error verifying signature:", error);
+    return false;
+  }
+};
+
+const handleSendMessage = async () => {
+  if (!input.trim() || !session) return;
+  
+  let signature: string | undefined = undefined;
+  let txHash: string | undefined = undefined;
+  let currentChatId = chatId;
+  
+  // Get message signature if wallet is connected
+  if (isConnected && address) {
+    signature = await signMessage(input);
+  }
+  
+  // Save message on chain if option is selected
+  if (saveOnChain && isConnected && address) {
+    txHash = await saveMessageOnChain(input);
+  }
+  
+  const userMessage: MessageType = {
+    id: Date.now().toString(),
+    content: input,
+    sender: "user",
+    timestamp: new Date(),
+    signature,
+    verified: signature ? true : undefined,
+    txHash
+  };
+  
+  setMessages((prev) => [...prev, userMessage]);
+  setInput("");
+  setIsLoading(true);
+  
+  try {
+    // Create a new chat if there isn't a chatId yet
+    if (!currentChatId) {
       try {
-        const response = await fetch(`/api/chat-history/${id}`);
+        // Generate a new unique chat ID
+        const newChatId = `chat-${Date.now()}`;
+        currentChatId = newChatId;
         
-        if (!response.ok) {
-          throw new Error(`Failed to fetch chat: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.chatHistory && data.chatHistory.messages) {
-          // Format the data to match our Message interface
-          const formattedMessages: Message[] = data.chatHistory.messages.map((msg: any) => ({
-            id: msg.id || `${id}-${Date.now()}`,
-            content: msg.content,
-            sender: msg.role === 'user' ? 'user' : 'ai',
-            timestamp: new Date(msg.timestamp || Date.now()),
-            signature: msg.signature,
-            verified: msg.verified,
-            txHash: msg.txHash
-          }));
-          
-          setMessages(formattedMessages);
-        } else {
-          // If no messages yet, show a welcome message
-          setMessages([
-            {
-              id: `welcome-${Date.now()}`,
-              content: "Welcome to FlowPilot AI! How can I help you today?",
-              sender: "ai",
-              timestamp: new Date(),
-            }
-          ]);
-        }
-      } catch (error) {
-        console.error('Error fetching chat history:', error);
-        // Fallback to a welcome message
-        setMessages([
-          {
-            id: `welcome-${Date.now()}`,
-            content: "Hello! I'm FlowPilot AI. How can I assist you with DeFi today?",
-            sender: "ai",
-            timestamp: new Date(),
-          }
-        ]);
-      }
-    } finally {
-      setIsFetchingHistory(false);
-    }
-  };
-
-  // Sign a message using the user's wallet
-  const signMessage = async (message: string): Promise<string | undefined> => {
-    if (!address || !window.ethereum) return undefined;
-    
-    try {
-      const provider = new ethers.BrowserProvider(window.ethereum as any);
-      const signer = await provider.getSigner();
-      const signature = await signer.signMessage(message);
-      return signature;
-    } catch (error) {
-      console.error("Error signing message:", error);
-      showNotification({
-        title: "Failed to sign message",
-        description: "Please check your wallet connection and try again.",
-        variant: "destructive",
-      });
-      return undefined;
-    }
-  };
-
-  // Verify a message signature
-  const verifySignature = (message: string, signature: string, signerAddress: string): boolean => {
-    try {
-      const recoveredAddress = ethers.verifyMessage(message, signature);
-      return recoveredAddress.toLowerCase() === signerAddress.toLowerCase();
-    } catch (error) {
-      console.error("Error verifying signature:", error);
-      return false;
-    }
-  };
-
-  // Save message to the blockchain
-  const saveMessageOnChain = async (message: string): Promise<string | undefined> => {
-    if (!address || !window.ethereum) return undefined;
-    
-    try {
-      // This function simulates a blockchain operation and returns a mock transaction hash
-      // In a real app, this would interact with a smart contract
-      
-      const provider = new ethers.BrowserProvider(window.ethereum as any);
-      const signer = await provider.getSigner();
-      
-      // Simulate a blockchain operation delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Return a mock transaction hash
-      return `0x${Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-    } catch (error) {
-      console.error("Error saving message to blockchain:", error);
-      return undefined;
-    }
-  };
-
-  const handleSendMessage = async () => {
-    if (!input.trim() || !session) return;
-    
-    let signature: string | undefined = undefined;
-    let txHash: string | undefined = undefined;
-    let currentChatId = chatId;
-    
-    // Get message signature if wallet is connected
-    if (isConnected && address) {
-      signature = await signMessage(input);
-    }
-    
-    // Save message on chain if option is selected
-    if (saveOnChain && isConnected && address) {
-      txHash = await saveMessageOnChain(input);
-    }
-    
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: input,
-      sender: "user",
-      timestamp: new Date(),
-      signature,
-      verified: signature ? true : undefined,
-      txHash
-    };
-    
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsLoading(true);
-    
-    try {
-      // Create a new chat if there isn't a chatId yet
-      if (!currentChatId) {
-        try {
-          // Generate a new unique chat ID
-          const newChatId = `chat-${Date.now()}`;
-          currentChatId = newChatId;
-          
-          const createChatResponse = await fetch('/api/chat-history', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chatId: newChatId,
-              walletAddress: address,
-              message: {
-                content: input,
-                role: 'user',
-                signature,
-                verified: signature ? true : undefined,
-                txHash
-              }
-            })
-          });
-          
-          const createChatData = await createChatResponse.json();
-          
-          if (!createChatResponse.ok) {
-            throw new Error(createChatData.error || "Failed to create chat");
-          }
-          
-          // Update the URL to include the new chatId without refreshing the page
-          if (window.history) {
-            window.history.pushState(
-              { chatId: newChatId },
-              '',
-              `/chat/${newChatId}`
-            );
-          }
-        } catch (error) {
-          console.error("Error creating chat:", error);
-        }
-      } else {
-        // Add message to existing chat
-        try {
-          const addMessageResponse = await fetch(`/api/chat-history/${currentChatId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+        const createChatResponse = await fetch('/api/chat-history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chatId: newChatId,
+            walletAddress: address,
+            title: input.substring(0, 30) + (input.length > 30 ? '...' : ''),
+            message: {
               content: input,
               role: 'user',
               signature,
               verified: signature ? true : undefined,
               txHash
-            })
-          });
-          
-          if (!addMessageResponse.ok) {
-            const errorData = await addMessageResponse.json();
-            throw new Error(errorData.error || "Failed to save message");
-          }
-        } catch (error) {
-          console.error("Error saving message:", error);
-        }
-      }
-      
-      // Call the advice API for AI response
-      const adviceResponse = await fetch('/api/advice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          message: input,
-          chatId: currentChatId,
-          walletAddress: address
-        }),
-      });
-      
-      if (!adviceResponse.ok) {
-        const errorData = await adviceResponse.json();
-        throw new Error(errorData.error || "Failed to get response");
-      }
-      
-      const adviceData = await adviceResponse.json();
-      
-      // Add AI response
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: adviceData.response || "I couldn't generate a response. Please try again.",
-        sender: "ai",
-        timestamp: new Date(),
-      };
-      
-      setMessages((prev) => [...prev, aiMessage]);
-    } catch (error) {
-      console.error("Error sending message:", error);
-      
-      // Add error message
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: "Sorry, I encountered an error processing your request. Please try again later.",
-        sender: "ai",
-        timestamp: new Date(),
-      };
-      
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-  };
-
-  const openEtherscan = (txHash: string) => {
-    window.open(`https://etherscan.io/tx/${txHash}`, '_blank');
-  };
-
-  return (
-    <div className="flex flex-col h-full border rounded-lg overflow-hidden bg-white/5 border-white/10">
-      <div className="p-4 border-b border-white/10 flex justify-between items-center">
-        <div>
-          <h2 className="text-lg font-semibold">FlowPilot AI Assistant</h2>
-          <p className="text-sm text-white/70">
-            Ask me anything about crypto markets, DeFi strategies, and risk management
-          </p>
-        </div>
+            }
+          })
+        });
         
-        {/* Wallet Connection Status */}
-        <div className="flex items-center">
-          {isConnected && address ? (
-            <div className="flex items-center bg-white/5 rounded-lg border border-white/10 px-3 py-1.5">
-              <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
-              <span className="text-sm truncate max-w-[150px]">
-                {ensName || `${address.substring(0, 6)}...${address.substring(address.length - 4)}`}
-              </span>
-            </div>
-          ) : (
-            <Button 
-              onClick={connectWallet} 
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white"
-              size="sm"
-            >
-              Connect Wallet
-            </Button>
-          )}
+        const createChatData = await createChatResponse.json();
+        
+        if (!createChatResponse.ok) {
+          throw new Error(createChatData.error || "Failed to create chat");
+        }
+        
+        // Update the URL to include the new chatId without refreshing the page
+        if (window.history) {
+          window.history.pushState(
+            { chatId: newChatId },
+            '',
+            `/chat/${newChatId}`
+          );
+        }
+        
+        // If we're in a single-page app environment, also fetch chat histories to update the list
+        fetchChatHistories?.();
+      } catch (error) {
+        console.error("Error creating chat:", error);
+      }
+    } else {
+      // Add message to existing chat
+      try {
+        const addMessageResponse = await fetch(`/api/chat-history/${currentChatId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: input,
+            role: 'user',
+            signature,
+            verified: signature ? true : undefined,
+            txHash
+          })
+        });
+        
+        if (!addMessageResponse.ok) {
+          const errorData = await addMessageResponse.json();
+          throw new Error(errorData.error || "Failed to save message");
+        }
+      } catch (error) {
+        console.error("Error saving message:", error);
+      }
+    }
+    
+    // Call the advice API for AI response
+    const adviceResponse = await fetch('/api/advice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        message: input,
+        chatId: currentChatId,
+        walletAddress: address
+      }),
+    });
+    
+    if (!adviceResponse.ok) {
+      const errorData = await adviceResponse.json();
+      throw new Error(errorData.error || "Failed to get response");
+    }
+    
+    const adviceData = await adviceResponse.json();
+    
+    // Add AI response
+    const aiMessage: MessageType = {
+      id: (Date.now() + 1).toString(),
+      content: adviceData.response || "I couldn't generate a response. Please try again.",
+      sender: "assistant",
+      timestamp: new Date(),
+    };
+    
+    setMessages((prev) => [...prev, aiMessage]);
+  } catch (error) {
+    console.error("Error sending message:", error);
+    
+    // Add error message
+    const errorMessage: MessageType = {
+      id: (Date.now() + 1).toString(),
+      content: "Sorry, I encountered an error processing your request. Please try again later.",
+      sender: "assistant",
+      timestamp: new Date(),
+    };
+    
+    setMessages((prev) => [...prev, errorMessage]);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+const handleKeyDown = (e: React.KeyboardEvent) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    handleSendMessage();
+  }
+};
+
+const copyToClipboard = (text: string) => {
+  navigator.clipboard.writeText(text);
+};
+
+const openEtherscan = (txHash: string) => {
+  window.open(`https://etherscan.io/tx/${txHash}`, '_blank');
+};
+
+return (
+  <div className="h-full flex flex-col">
+    {authError ? (
+      <div className="flex items-center justify-center h-full p-6">
+        <div className="text-center max-w-lg">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-xl font-bold mb-2">Authentication Required</h3>
+          <p className="text-white/70 mb-4">{authError}</p>
+          <Button onClick={() => router.push('/account')} className="bg-white/10 hover:bg-white/20">
+            Sign In
+          </Button>
         </div>
       </div>
-      
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
-          <AnimatePresence mode="wait">
-            {isFetchingHistory ? (
-              <motion.div 
-                key="loading-history"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center justify-center h-40"
-              >
-                <div className="flex flex-col items-center">
-                  <div className="animate-spin h-8 w-8 border-3 border-blue-500 rounded-full border-t-transparent mb-3"></div>
-                  <p className="text-white/50">Loading chat history...</p>
+    ) : (
+      <>
+        {/* Messages area */}
+        <ScrollArea className="flex-1 p-4">
+          {isLoading ? (
+            <div className="flex justify-center items-center h-full">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+              <span className="ml-2 text-white/70">Loading messages...</span>
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center p-6">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center mb-6 shadow-lg shadow-blue-500/20 animate-pulse">
+                <Send className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Start a new conversation</h3>
+              <p className="text-white/70 max-w-md mb-8">
+                Chat with FlowPilot AI about cryptocurrency markets, portfolio optimization, or DeFi strategies.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl w-full">
+                <div className="col-span-1 md:col-span-2 mb-2">
+                  <h4 className="text-sm font-medium text-white/80 uppercase tracking-wider mb-3 text-left">Popular Topics</h4>
                 </div>
-              </motion.div>
-            ) : messages.length === 0 ? (
-              <motion.div 
-                key="empty-state"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center justify-center h-40"
-              >
-                <p className="text-white/50 text-center">
-                  No messages yet. Start a conversation!
-                </p>
-              </motion.div>
-            ) : (
-              <motion.div 
-                key="messages-container"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="space-y-4"
-              >
-                {messages.map((message) => (
-                  <motion.div
-                    key={`chat-message-${message.id}`}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
+                
+                {[
+                  {
+                    text: "Market Analysis",
+                    description: "Get the latest crypto market trends and insights",
+                    icon: <BarChart3 size={18} className="text-white" />,
+                    suggestions: [
+                      "What's happening with ETH price today?",
+                      "Analyze Bitcoin's recent market movements",
+                      "Give me a market overview of DeFi tokens"
+                    ]
+                  },
+                  {
+                    text: "Risk Management",
+                    description: "Strategies to protect your crypto investments",
+                    icon: <Shield size={18} className="text-white" />,
+                    suggestions: [
+                      "How do I manage liquidation risks?", 
+                      "What's the best way to hedge my crypto positions?",
+                      "Explain risk management for yield farming"
+                    ]
+                  },
+                  {
+                    text: "Portfolio Optimization",
+                    description: "Improve your investment allocation strategy",
+                    icon: <TrendingUp size={18} className="text-white" />,
+                    suggestions: [
+                      "How can I optimize my DeFi portfolio?",
+                      "What's an ideal allocation for a balanced crypto portfolio?",
+                      "Analyze my investment strategy for long-term growth"
+                    ]
+                  },
+                  {
+                    text: "DeFi Strategies",
+                    description: "Learn about decentralized finance opportunities",
+                    icon: <Building size={18} className="text-white" />,
+                    suggestions: [
+                      "Explain liquidity mining strategies",
+                      "What are the best yield farming opportunities?",
+                      "How do I maximize returns in DeFi?"
+                    ]
+                  }
+                ].map((category, index) => (
+                  <div 
+                    key={index} 
+                    className="bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 rounded-xl p-4 transition-all duration-200 group hover:shadow-lg hover:shadow-blue-500/5 hover:border-blue-500/30"
+                  >
+                    <div className="flex items-start space-x-3 mb-3">
+                      <div className="bg-gradient-to-br from-blue-500 to-indigo-600 h-10 w-10 rounded-lg text-white flex items-center justify-center p-2">
+                        {category.icon}
+                      </div>
+                      <div className="text-left">
+                        <h5 className="font-medium text-white group-hover:text-blue-400 transition-colors">{category.text}</h5>
+                        <p className="text-xs text-white/60">{category.description}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2 mt-3">
+                      {category.suggestions.map((suggestion, sIndex) => (
+                        <button
+                          key={`${index}-${sIndex}`}
+                          onClick={() => {
+                            setInput(suggestion);
+                            setTimeout(() => {
+                              const textarea = document.querySelector('textarea');
+                              if (textarea) textarea.focus();
+                            }, 100);
+                          }}
+                          className="text-left w-full text-sm py-2 px-3 rounded-lg bg-white/5 hover:bg-blue-500/20 text-white/80 hover:text-white transition-colors border border-transparent hover:border-blue-500/30"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="w-full max-w-2xl mt-8">
+                <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4">
+                  <h4 className="text-sm font-medium text-white/90 mb-2">Or type your own question</h4>
+                  <div className="relative">
+                    <Input 
+                      placeholder="Ask anything about crypto or DeFi..."
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSendMessage();
+                        }
+                      }}
+                      className="bg-white/5 border-white/10 focus:border-blue-500 pl-3 pr-10 py-3 text-white"
+                    />
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={!input.trim()}
+                      className="absolute right-1 top-1 p-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 pb-2">
+              {messages.map((message) => (
+                <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div 
                     className={cn(
-                      "flex",
-                      message.sender === "user" ? "justify-end" : "justify-start" 
+                      "max-w-[80%] rounded-lg p-4 relative group",
+                      message.sender === "user"
+                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
+                        : "bg-white/10 backdrop-blur-sm text-white"
                     )}
                   >
-                    <div
-                      className={cn(
-                        "max-w-[80%] rounded-lg p-3 relative",
-                        message.sender === "user"
-                          ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
-                          : "bg-white/10 text-white"
-                      )}
-                    >
-                      {/* Message verification badge */}
-                      {message.sender === "user" && message.verified && (
-                        <div 
-                          className="absolute -top-2 -right-2 bg-green-500 rounded-full p-1"
-                          title="Message verified with wallet signature"
-                        >
-                          <Shield className="h-3 w-3 text-white" />
-                        </div>
-                      )}
+                    <div className="break-words">
+                      {message.content}
+                    </div>
+                    
+                    {/* Message metadata */}
+                    <div className="flex items-center justify-between mt-2 text-xs opacity-70">
+                      {/* Left side: timestamp */}
+                      <div>
+                        {message.timestamp.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
                       
-                      <div className="break-words">{message.content}</div>
-                      
-                      <div className="flex items-center justify-end mt-1 space-x-2">
-                        {/* Transaction hash link */}
-                        {message.txHash && (
-                          <div className="flex items-center">
-                            <button 
-                              onClick={() => openEtherscan(message.txHash!)}
-                              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                              title="View on Etherscan"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                            </button>
-                            <button 
-                              onClick={() => copyToClipboard(message.txHash!)}
-                              className="ml-1 text-xs text-white/50 hover:text-white/70 transition-colors"
-                              title="Copy transaction hash"
-                            >
-                              <Copy className="h-3 w-3" />
-                            </button>
+                      {/* Right side: verification status and transaction hash */}
+                      <div className="flex items-center space-x-2">
+                        {message.verified && (
+                          <div className="flex items-center text-green-400" title="Message verified with wallet signature">
+                            <div className="w-3 h-3 mr-1">🛡️</div>
+                            <span>Verified</span>
                           </div>
                         )}
                         
-                        <span className="text-xs opacity-70">
-                          {message.timestamp.toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
+                        {message.txHash && (
+                          <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => copyToClipboard(message.txHash as string)}
+                              className="hover:text-blue-300 transition-colors"
+                              title="Copy transaction hash"
+                            >
+                              <div className="w-3 h-3">📋</div>
+                            </button>
+                            <button
+                              onClick={() => openEtherscan(message.txHash as string)}
+                              className="hover:text-blue-300 transition-colors"
+                              title="View on Etherscan"
+                            >
+                              <div className="w-3 h-3">🔗</div>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </motion.div>
-                ))}
-              </motion.div>
-            )}
-            {isLoading && (
-              <motion.div
-                key="loading-indicator"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-                className="flex justify-start"
-              >
-                <div className="max-w-[80%] rounded-lg p-3 bg-white/10 text-white">
-                  <div className="flex items-center space-x-2">
-                    <div className="flex space-x-1">
-                      <motion.div 
-                        className="w-2 h-2 rounded-full bg-white/50"
-                        animate={{ y: [0, -5, 0] }}
-                        transition={{ repeat: Infinity, duration: 0.8 }}
-                      />
-                      <motion.div 
-                        className="w-2 h-2 rounded-full bg-white/50"
-                        animate={{ y: [0, -5, 0] }}
-                        transition={{ repeat: Infinity, duration: 0.8, delay: 0.2 }}
-                      />
-                      <motion.div 
-                        className="w-2 h-2 rounded-full bg-white/50"
-                        animate={{ y: [0, -5, 0] }}
-                        transition={{ repeat: Infinity, duration: 0.8, delay: 0.4 }}
-                      />
-                    </div>
-                    <span className="text-white/70 text-sm">FlowPilot is thinking...</span>
                   </div>
                 </div>
-              </motion.div>
-            )}
-            {isVerifying && (
-              <motion.div
-                key="verifying-indicator"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
-              >
-                <div className="bg-gray-900 p-6 rounded-lg border border-white/10 text-center">
-                  <div className="animate-spin h-10 w-10 border-3 border-blue-500 rounded-full border-t-transparent mb-4 mx-auto"></div>
-                  <p className="text-lg font-medium mb-2">Please sign the message</p>
-                  <p className="text-sm text-white/70">Check your wallet to complete the signature...</p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
-      
-      <div className="p-3 border-t border-white/10">
-        {/* Web3 Options */}
-        {isConnected && address && (
-          <div className="flex items-center justify-end mb-2">
-            <label className="flex items-center text-xs text-white/70 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={saveOnChain}
-                onChange={() => setSaveOnChain(!saveOnChain)}
-                className="mr-2 h-3 w-3"
-              />
-              Store on-chain
-            </label>
-          </div>
-        )}
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </ScrollArea>
         
-        <div className="flex items-end gap-2">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type your message here..."
-            className="min-h-[80px] resize-none bg-white/5 border-white/10 text-white placeholder:text-white/50"
-          />
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleSendMessage}
-            disabled={isLoading || !input.trim() || !session}
-            className={`rounded-full p-3 flex items-center justify-center min-w-[40px] h-10 ${
-              isLoading || !input.trim() || !session 
-                ? 'opacity-50 bg-white/10' 
-                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500'
-            }`}
-          >
-            <Send className="h-5 w-5" />
-          </motion.button>
+        {/* Input area */}
+        <div className="p-4 border-t border-white/10 bg-white/5">
+          <div className="relative">
+            <Textarea
+              placeholder="Type your message..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isLoading || !session}
+              className="min-h-[80px] w-full resize-none bg-white/5 border-white/10 focus:border-blue-500 rounded-lg p-3 pr-16 text-white placeholder-white/50"
+            />
+            
+            {isConnected && (
+              <div className="absolute left-4 bottom-4 flex items-center space-x-2">
+                <div className="flex items-center">
+                  <Checkbox
+                    id="saveOnChain"
+                    checked={saveOnChain}
+                    onChange={(e) => setSaveOnChain(e.target.checked)}
+                    className="mr-2"
+                  />
+                  <Label htmlFor="saveOnChain" className="text-xs cursor-pointer">
+                    Save on-chain
+                  </Label>
+                </div>
+              </div>
+            )}
+            
+            <Button
+              onClick={handleSendMessage}
+              disabled={isLoading || !input.trim() || !session}
+              className="absolute bottom-4 right-4 p-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
+          
+          {!isConnected && (
+            <div className="mt-3 flex justify-end">
+              <Button
+                onClick={() => router.push('/wallet')}
+                variant="outline"
+                className="text-xs bg-transparent border border-white/20 hover:border-white/40 text-white/70 hover:text-white/90"
+              >
+                Connect wallet to verify messages
+              </Button>
+            </div>
+          )}
         </div>
-      </div>
-    </div>
-  );
+      </>
+    )}
+  </div>
+);
 } 

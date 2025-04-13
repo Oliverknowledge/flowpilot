@@ -126,6 +126,28 @@
   .btn-gradient:hover {
     background-position: 100% 0%;
   }
+
+  /* Responsive containers */
+  .container-fluid {
+    @apply w-full px-4 sm:px-6 md:px-8 mx-auto;
+  }
+
+  .responsive-padding {
+    @apply px-4 sm:px-6 md:px-8 py-6 sm:py-8 md:py-12;
+  }
+
+  .responsive-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6;
+  }
+
+  .responsive-flex {
+    @apply flex flex-col sm:flex-row items-center;
+  }
+
+  /* Card responsiveness */
+  .responsive-card {
+    @apply w-full sm:max-w-md md:max-w-lg mx-auto p-4 sm:p-6;
+  }
 }
 
 /* Force dark mode by default */
@@ -137,6 +159,7 @@ html {
   color-scheme: dark;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+  -webkit-tap-highlight-color: transparent;
 }
 
 @keyframes shimmer {
@@ -202,5 +225,42 @@ html {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+  .hide-on-mobile {
+    display: none;
+  }
+  
+  .mobile-full-width {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  .mobile-stack {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  
+  .mobile-text-center {
+    text-align: center !important;
+  }
+  
+  .mobile-py {
+    padding-top: 2rem !important;
+    padding-bottom: 2rem !important;
+  }
+  
+  .mobile-px {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+  
+  .mobile-mb {
+    margin-bottom: 1.5rem !important;
+  }
 }
 

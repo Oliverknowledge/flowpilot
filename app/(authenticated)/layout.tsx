@@ -1,11 +1,10 @@
 "use client"
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Home, MessageSquare, Settings, LogOut, ChevronLeft, ChevronRight, Wallet, Bell, Menu } from 'lucide-react';
+import { Home, MessageSquare, Settings, LogOut, ChevronLeft, Bell, Menu, Wallet } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { useWallet } from '@/contexts/WalletContext';
 
 interface AuthenticatedLayoutProps {
   children: React.ReactNode;
@@ -83,22 +82,26 @@ const NavItem = ({ icon, label, path, isActive, isCollapsed, onClick }: NavItemP
 export default function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { data: session } = useSession();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { isConnected, address, connectWallet, disconnectWallet, showWalletOptions, setShowWalletOptions } = useWallet();
+  const { data: session, status } = useSession();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
-  // Handle wallet change
-  const handleChangeWallet = () => {
-    // First disconnect, then allow reconnecting
-    disconnectWallet();
-    setShowWalletOptions(true);
+  // Move the redirect to useEffect
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/");
+    }
+  }, [status, router]);
+  
+  // Toggle sidebar
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
   };
-
+  
   const navItems = [
     { icon: <Home className="h-5 w-5" />, label: 'Dashboard', path: '/dashboard' },
     { icon: <MessageSquare className="h-5 w-5" />, label: 'Chat', path: '/chat' },
-    { icon: <Wallet className="h-5 w-5" />, label: 'Wallet', path: '/wallet' },
     { icon: <Bell className="h-5 w-5" />, label: 'Alarms', path: '/alarms' },
+    { icon: <div className="h-5 w-5 flex items-center justify-center">👛</div>, label: 'Wallet', path: '/wallet' }
   ];
 
   // Sidebar animation variants
@@ -185,7 +188,7 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
       <motion.div 
         className="bg-black/30 backdrop-blur-lg border-r border-white/5 h-full flex flex-col relative z-10"
         initial="expanded"
-        animate={sidebarCollapsed ? "collapsed" : "expanded"}
+        animate={sidebarOpen ? "collapsed" : "expanded"}
         variants={sidebarVariants}
       >
         {/* Logo and Toggle */}
@@ -198,13 +201,13 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
           </motion.h1>
           
           <motion.button
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            onClick={toggleSidebar}
             className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
-            whileHover={{ scale: 1.1, rotate: sidebarCollapsed ? -180 : 0 }}
+            whileHover={{ scale: 1.1, rotate: sidebarOpen ? -180 : 0 }}
             whileTap={{ scale: 0.9 }}
           >
             <motion.div
-              animate={{ rotate: sidebarCollapsed ? 180 : 0 }}
+              animate={{ rotate: sidebarOpen ? 180 : 0 }}
               transition={{ duration: 0.4, type: "spring", bounce: 0.5 }}
             >
               <ChevronLeft className="h-4 w-4 text-white/80" />
@@ -232,7 +235,7 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
                   label={item.label}
                   path={item.path}
                   isActive={pathname === item.path}
-                  isCollapsed={sidebarCollapsed}
+                  isCollapsed={sidebarOpen}
                   onClick={() => router.push(item.path)}
                 />
               </motion.div>
@@ -247,9 +250,6 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
             variants={profileVariants}
           >
             <p className="text-sm font-medium truncate">{session?.user?.email || 'User'}</p>
-            <p className="text-xs text-white/50 truncate">
-              {address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : 'Wallet not connected'}
-            </p>
           </motion.div>
           
           <motion.button
@@ -258,12 +258,12 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            <div className={`text-red-400 ${sidebarCollapsed ? 'mx-auto' : 'mr-3'}`}>
+            <div className={`text-red-400 ${sidebarOpen ? 'mx-auto' : 'mr-3'}`}>
               <LogOut className="h-5 w-5" />
             </div>
             
             <AnimatePresence mode="wait">
-              {!sidebarCollapsed && (
+              {!sidebarOpen && (
                 <motion.span
                   key="logout-text"
                   initial={{ opacity: 0, width: 0 }}
@@ -282,36 +282,6 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
       
       {/* Main content */}
       <div className="flex-1 p-6 overflow-auto">
-        {/* Wallet actions */}
-        <div className="flex justify-end gap-4 mb-6">
-          {isConnected ? (
-            <motion.button
-              onClick={handleChangeWallet}
-              className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-sm transition-all flex items-center gap-2 text-sm"
-              whileHover={{ y: -2, boxShadow: "0 8px 30px rgba(59, 130, 246, 0.15)" }}
-              whileTap={{ y: 0 }}
-            >
-              <Wallet className="h-4 w-4 text-blue-400" />
-              <span>
-                {address?.substring(0, 6)}...{address?.substring(address.length - 4)}
-              </span>
-            </motion.button>
-          ) : (
-            <motion.button
-              onClick={connectWallet}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white transition-all relative overflow-hidden group"
-              whileHover={{ y: -2, boxShadow: "0 8px 30px rgba(59, 130, 246, 0.3)" }}
-              whileTap={{ y: 0 }}
-            >
-              <div className="absolute inset-0 w-[200%] animate-[shine_3s_ease-in-out_infinite] opacity-0 group-hover:opacity-100" />
-              <div className="flex items-center gap-2 relative z-10">
-                <Wallet className="h-4 w-4" />
-                <span>Connect Wallet</span>
-              </div>
-            </motion.button>
-          )}
-        </div>
-        
         {/* Page content */}
         <div className="w-full">
           {children}

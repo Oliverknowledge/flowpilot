@@ -9,9 +9,11 @@ import dbConnect from "@/lib/dbConnect";
 // Get all chat histories for a user
 export async function GET(req: Request) {
   try {
+    console.log("Fetching all chat histories");
     const session = await getServerSession(config);
     
     if (!session?.user?.email) {
+      console.log("Unauthorized: No session email");
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -22,6 +24,7 @@ export async function GET(req: Request) {
     
     // Get user's email from session
     const userEmail = session.user.email;
+    console.log("Looking for chat histories for user:", userEmail);
     
     // Extract search params (if any)
     const { searchParams } = new URL(req.url);
@@ -31,6 +34,8 @@ export async function GET(req: Request) {
       .select('chatId title updatedAt')
       .sort({ updatedAt: -1 }) // Most recent first
       .lean();
+    
+    console.log(`Found ${chatHistories.length} chat histories`);
     
     return NextResponse.json({
       success: true,
@@ -71,7 +76,10 @@ export async function POST(req: Request) {
     }
     
     // Check if chat already exists
-    let chatHistory = await ChatHistory.findOne({ chatId });
+    let chatHistory = await ChatHistory.findOne({ 
+      chatId,
+      userEmail: session.user.email
+    });
     
     // If it doesn't exist, create a new one
     if (!chatHistory) {
@@ -116,7 +124,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Error creating chat history:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create chat history" },
+      { error: error.message },
       { status: 500 }
     );
   }

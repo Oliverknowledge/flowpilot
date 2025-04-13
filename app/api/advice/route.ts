@@ -1,18 +1,13 @@
 "use server";
 
 import { NextResponse } from "next/server";
-import { OpenAI } from "openai";
 import { getServerSession } from "next-auth";
 import { config } from "@/auth";
 import connectDB from "@/lib/mongodb";
 import Notification from "@/models/Notification";
 import ChatHistory from "@/models/ChatHistory";
 import dbConnect from "@/lib/dbConnect";
-
-// ⛳️ Init OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { executeAgentQuery } from "@/lib/agent";
 
 // 🎯 Generate AI advice and save to chat history
 export async function POST(req: Request) {
@@ -30,77 +25,64 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
     
-    // 1. 🧠 Generate AI response with OpenAI
-    let aiResponse;
+    if (!chatId) {
+      return NextResponse.json({ error: "Chat ID is required" }, { status: 400 });
+    }
+    
+    // 1. 🧠 Generate AI response with our custom agent
     let responseText;
     
     try {
-      aiResponse = await openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: "You are a DeFi AI agent. Parse intent and suggest a strategy.",
-          },
-          {
-            role: "user",
-            content: message,
-          },
-        ],
-      });
+      // Format the prompt for the agent
+      const prompt = `User request: ${message}\n\nProvide a helpful response about DeFi, crypto strategies, or related topics.`;
       
-      responseText = aiResponse.choices[0].message.content ?? "No output";
-      console.log("AI Response:", responseText);
+      // Use our custom agent instead of OpenAI
+      responseText = await executeAgentQuery(prompt);
+      console.log("Agent Response:", responseText);
     } catch (error) {
-      console.error("Error generating AI response:", error);
-      // Fallback response if OpenAI API fails
-      responseText = "I'm sorry, I couldn't generate a response at the moment. Please try again later.";
+      console.error("Error generating agent response:", error);
+      // Fallback response if agent fails
+      responseText = "I'm sorry, I couldn't process your request at the moment. Please try again later.";
     }
 
-    // 2. 📝 Save to chat history if chat ID is provided
-    if (chatId && session.user?.email) {
-      try {
-        await dbConnect();
-        
-        // Find the chat history
-        let chatHistory = await ChatHistory.findOne({ 
+    // 2. 📝 Save to chat history
+    try {
+      await dbConnect();
+      
+      // Find the chat history
+      let chatHistory = await ChatHistory.findOne({ 
+        chatId,
+        userEmail: session.user.email
+      });
+      
+      // If it doesn't exist, create a new one with proper user details
+      if (!chatHistory) {
+        chatHistory = new ChatHistory({
           chatId,
-          userEmail: session.user.email
+          userId: session.user.id || session.user.email,
+          userEmail: session.user.email,
+          walletAddress,
+          title: message.length > 30 ? message.substring(0, 30) + '...' : message,
+          messages: []
         });
-        
-        // If it doesn't exist, create a new one
-        if (!chatHistory) {
-          chatHistory = new ChatHistory({
-            chatId,
-            userId: session.user.id || session.user.email,
-            userEmail: session.user.email,
-            walletAddress,
-            title: message.length > 30 ? message.substring(0, 30) + '...' : message,
-            messages: [
-              // Add the user message first (if not already saved by the client)
-              {
-                id: Date.now().toString(),
-                content: message,
-                role: 'user',
-                timestamp: new Date()
-              }
-            ]
-          });
-        }
-        
-        // Add the AI response
-        chatHistory.messages.push({
-          id: (Date.now() + 1).toString(),
-          content: responseText,
-          role: 'ai',
-          timestamp: new Date()
-        });
-        
-        await chatHistory.save();
-      } catch (error) {
-        console.error("Error saving to chat history:", error);
-        // Continue even if saving fails
       }
+      
+      // Add the AI response
+      chatHistory.messages.push({
+        id: (Date.now() + 1).toString(),
+        content: responseText,
+        role: 'ai',
+        timestamp: new Date()
+      });
+      
+      await chatHistory.save();
+    } catch (error) {
+      console.error("Error saving to chat history:", error);
+      // Return an error if saving to chat history fails
+      return NextResponse.json(
+        { error: "Failed to save chat history" },
+        { status: 500 }
+      );
     }
     
     // 3. 📢 Create a notification about this advice using existing Notification model
@@ -109,10 +91,10 @@ export async function POST(req: Request) {
       await Notification.create({
         userId: session.user.id || 'unknown',
         email: session.user.email,
-        title: 'New Strategy Advice',
-        message: `The AI provided advice on: "${message.substring(0, 60)}${message.length > 60 ? '...' : ''}"`,
+        title: 'New Strategy Advice from Agent',
+        message: `The AI agent provided advice on: "${message.substring(0, 60)}${message.length > 60 ? '...' : ''}"`,
         type: 'info',
-        source: 'bot',
+        source: 'agent',
         read: false
       });
     } catch (error) {
